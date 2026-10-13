@@ -23,11 +23,14 @@ def formula(archive, url, version, homepage):
   version {quote(version)}
   sha256 "{sha}"
 
+  license "MIT"
+
   depends_on :macos
   depends_on arch: :arm64
 
   def install
     libexec.install "bin"
+    prefix.install "LICENSE", "THIRD_PARTY_NOTICES.md", "licenses"
     bin.install_symlink libexec/"bin/llm-forensics" => "meow"
   end
 

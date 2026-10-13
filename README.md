@@ -45,15 +45,25 @@ Native builds must be made on the target platform. Current distribution work
 focuses on macOS Apple Silicon. Same-host testing is not independent deployment
 certification. Windows/Linux and Intel Mac deployment are not certified.
 
-## Distribution status
+## Install on macOS Apple Silicon
 
-No public Homebrew tap or signed/notarized release is available yet. The packaging
-folder contains a local installer intended for a complete extracted native release
-and a formula generator requiring explicit hosting URLs. Do not run the installer
-from this source tree. Existing private evidence and development scan reports are
-not included in this repository.
+```sh
+brew tap precisefull47/meowrtuary
+brew install meowrtuary
+meow
+```
+
+Updates: `brew upgrade meowrtuary`. Remove: `brew uninstall meowrtuary`.
+The formula downloads the full native bundle from this repository's GitHub Releases
+and verifies its SHA-256 checksum. No separate Python installation is required.
+Intel Macs and Linux are not supported by this formula.
+
+This is v1 Preview (internal version 1.4.2), not a production-certified release.
+The executable is not Developer ID signed or notarized. Independent-Mac deployment
+remains unverified. Full Disk Access is a separate macOS user setting when needed.
+Private evidence and development scan reports are not included.
 
 ## License
 
-A distribution license has not yet been selected. Public availability alone does
-not grant an open-source license. A license will be added after the owner chooses it.
+MIT License. Copyright (c) 2026 precisefull47. See LICENSE.
+Bundled third-party runtimes retain their separate upstream licenses.

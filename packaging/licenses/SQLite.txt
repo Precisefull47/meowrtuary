@@ -1,0 +1,2 @@
+SQLite is dedicated to the public domain by its authors.
+Upstream statement: https://www.sqlite.org/copyright.html
