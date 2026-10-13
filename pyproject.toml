@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-llm-forensics"
+version = "1.4.2"
+description = "Evidence-linked local LLM artifact triage prototype"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+meow = "llm_forensics.__main__:entry_point"
+llm-forensics = "llm_forensics.__main__:entry_point"
+
+[tool.setuptools.packages.find]
+include = ["llm_forensics*"]
