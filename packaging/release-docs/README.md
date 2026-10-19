@@ -1,50 +1,101 @@
-# meowrtuary — v1 Preview
+# meowrtuary
 
-Internal version: 1.4.2. Platform: macOS Apple Silicon (ARM64).
+```text
+ /\_/\
+( o.o )   meowrtuary  1.5.0
+```
 
-A terminal tool for examining local artifacts from Ollama, LM Studio and llama.cpp.
-Includes acquisition, reporting, case comparison, integrity checks, packaging,
-experimental deleted-record recovery, and synthetic validation.
+A macOS command-line tool for discovering, acquiring and reviewing local LLM
+artifacts from Ollama, LM Studio and llama.cpp. Use its guided menu or scriptable
+commands to preserve evidence, generate searchable reports and verify case integrity.
 
 ## Install
 
-Verify the archive against its separately obtained trusted SHA-256 checksum, then
-extract it. From the extracted folder:
+For **macOS Apple Silicon (ARM64)** with Homebrew installed:
 
 ```sh
-sh install-local.sh
+brew tap precisefull47/meowrtuary
+brew install meowrtuary
 meow
 ```
 
-This installs the complete native bundle under `~/.local/share/meowrtuary/1.4.2`
-and a `~/.local/bin/meow` symlink. No Python installation is required.
-If your shell cannot find `meow`, add `~/.local/bin` to PATH. Existing commands
-and installed version directories are never overwritten. For immediate use without
-installation: `./bin/llm-forensics`.
+Update an existing installation:
 
-Useful commands: `meow --help`, `meow --doctor`, `meow --no-animation`.
-For an isolated synthetic test:
-`meow --self-test --output /absolute/path/to/a/new-validation-folder`.
+```sh
+brew update
+brew upgrade meowrtuary
+meow --version
+```
 
-To remove a manual installation, verify and remove the `~/.local/bin/meow` symlink
-and the corresponding version directory. Keep evidence and reports separately.
-The installer refuses upgrades in place; retain the previous version for rollback,
-remove only its command symlink, then install the new version.
+The native package includes Python. No model download, API key or paid developer
+membership is needed to run it. Internet access is needed for installation;
+analysis operates locally. Intel Macs and Windows/Linux execution are not verified.
 
-## Scope
+Alternatively download the archive and matching checksum from
+[Releases](https://github.com/Precisefull47/meowrtuary/releases), verify the checksum,
+and run the extracted `bin/llm-forensics --menu`. Keep its `_internal` directory intact.
+See the [user guide](USER_GUIDE.md) for manual installation and troubleshooting.
 
-Use only on data you are authorized to examine. The tool never collects passwords.
-Full Disk Access is granted separately through macOS settings when needed. Reading
-a live filesystem can affect metadata; prefer acquired read-only evidence.
+## What it does
 
-The presence and recoverability of conversations depends on runner version and
-remaining data. No findings does not prove absence of use. Deleted records are
-experimental candidates. Unsigned manifests detect changes relative to the
-manifest; they do not independently establish authenticity.
+- **Scan:** discover supported artifacts in selected local locations.
+- **Analyze:** parse acquired evidence and optionally capture originals into a case.
+- **Reports:** browse conversations, evidence and timeline; export JSON, HTML and CSV.
+- **Verify:** check acquired-file hashes or the integrity of the complete sealed case.
+- **Compare:** compare two case results without rewriting either.
+- **Package:** create a separate shareable case bundle.
+- **Validate:** run controlled built-in fixtures and inspect environment diagnostics.
 
-This preview is tested on the development Mac. Independent-Mac installation,
-Intel Macs, and earlier macOS versions remain unverified. The executable is not
-Developer ID signed or notarized. Do not disable system protections to run it.
+The menu groups these operations into Scan, Analyze, Open a case, Case tools and
+Diagnostics. Arrow keys, numbered choices and the on-screen shortcuts are supported.
+Use `meow --no-animation` for a quiet startup.
 
-The original project code is MIT licensed, copyright 2026 precisefull47.
-Bundled runtime components retain their own licenses; see THIRD_PARTY_NOTICES.md.
+## Command-line examples
+
+```sh
+meow --help
+meow --doctor
+meow --live --acquire --format both --timeline --output ./new-case
+meow /path/to/acquired-evidence --source-os macos --acquire --format both --output ./new-analysis
+meow --verify-case ./new-case
+meow --verify-package ./new-case
+meow --self-test --output ./new-self-test
+```
+
+Choose a new output directory outside the evidence source. Guided acquisitions
+use the device name and acquisition timestamp for default case-folder names;
+original evidence filenames remain intact. Reports show source paths, record
+locators and collection gaps so findings can be traced to their origin.
+
+## Scope and trust
+
+This is artifact analysis, not guaranteed recovery of every conversation or deleted
+file. Retention differs between runners and modes. Prompts may survive without
+replies. Full Disk Access is granted separately in macOS; the tool cannot bypass
+permissions. Live acquisition is not an atomic disk image. Hashes detect changes
+relative to a manifest; they are not independent proof of authenticity.
+
+Read [supported use and recovery limits](SUPPORTED_USE.md), the
+[verification matrix](VALIDATION.md) and [release notes](RELEASE_NOTES.md).
+The executable is not Developer ID signed or notarized. Native file-picker
+acceptance and independent physical-Mac deployment remain unverified.
+
+## Development
+
+Python 3.13+ is required for the development QA workflow. On macOS ARM64, install
+`build-requirements.txt` in a virtual environment and run:
+
+```sh
+python3 -m unittest discover -s tests
+python3 qa/run.py --allow-missing-external
+```
+
+The second command builds and tests fresh packages in isolated worktrees. Its
+successful automated gate does not mark external acceptance passed. See
+[QA instructions](https://github.com/Precisefull47/meowrtuary/blob/main/qa/README.md). QA is development tooling, separate from the
+installed forensic executable. Never use real evidence as writable test fixtures.
+
+## License
+
+Original code is [MIT licensed](LICENSE). Bundled runtime components retain their
+own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).

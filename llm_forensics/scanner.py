@@ -56,7 +56,7 @@ def inspect_file(path, runner, kind, max_bytes, recover_deleted=False):
     if kind == "desktop_sqlite":
         return read_desktop(path, max_bytes, __version__, recover_deleted)
     # O_NOFOLLOW guards the final component. Use an acquired, stable evidence tree;
-    # this prototype does not guarantee atomic traversal on a changing live host.
+    # the scanner does not guarantee atomic traversal on a changing live host.
     fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
     with os.fdopen(fd, "rb") as stream:
         before = os.fstat(stream.fileno())
@@ -225,7 +225,7 @@ def scan(root, max_bytes=MAX_BYTES, source_os="unknown", recover_deleted=False, 
               "files_considered": 0, "analysis_host_os": platform.system(),
               "source_os": source_os, "source_os_basis": "operator declaration" if source_os != "unknown" else "not specified",
               "discovery_coverage": rule_coverage,
-              "limitations": ["Experimental triage of existing files; optional recovery examines supported SQLite freelist residue, not deleted filesystem files.",
+              "limitations": ["Existing-file analysis; optional experimental recovery examines supported SQLite freelist residue, not deleted filesystem files.",
                               "No runner processes, APIs, network services or model inference are invoked.",
                               "Reading may affect filesystem access times. Use a read-only acquired copy for evidence work.",
                               "Detection uses known path patterns and .gguf filenames; it is not exhaustive.",

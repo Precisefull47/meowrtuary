@@ -1,4 +1,4 @@
-"""Create a clean, immutable, unpublished meowrtuary distribution candidate."""
+"""Create a clean, immutable meowrtuary distribution archive."""
 import hashlib,json,shutil,subprocess,tarfile,tempfile
 from pathlib import Path
 import sys
@@ -12,21 +12,21 @@ def main():
     native=ROOT/'dist/darwin-arm64/llm-forensics'
     result=subprocess.check_output([str(native/'llm-forensics'),'--version'],text=True)
     if result.strip().split()[-1]!=__version__:raise ValueError('Rebuild the native version before packaging')
-    out=ROOT/'dist/candidates';out.mkdir(exist_ok=True)
+    out=ROOT/'dist/distribution';out.mkdir(exist_ok=True)
     name=f'meowrtuary-{__version__}-macos-arm64'
     archive=out/(name+'.tar.gz')
     if archive.exists():raise FileExistsError('Preserve existing candidate; choose a new version or archive it manually')
     with tempfile.TemporaryDirectory() as temp:
         stage=Path(temp)/name;stage.mkdir()
         shutil.copytree(native,stage/'bin',symlinks=True)
-        for name_ in ('README.md','THIRD_PARTY_NOTICES.md'):
+        for name_ in ('README.md','THIRD_PARTY_NOTICES.md','SUPPORTED_USE.md','RELEASE_NOTES.md','USER_GUIDE.md','VALIDATION.md'):
             shutil.copyfile(ROOT/'packaging/release-docs'/name_,stage/name_)
         shutil.copyfile(ROOT/'LICENSE',stage/'LICENSE')
         shutil.copytree(ROOT/'packaging/licenses',stage/'licenses')
         shutil.copyfile(ROOT/'packaging/install-local.sh',stage/'install-local.sh')
         (stage/'install-local.sh').chmod(0o755)
         (stage/'VERSION').write_text(__version__+'\n')
-        (stage/'RELEASE.json').write_text(json.dumps({'product':'meowrtuary','version':__version__,'label':'v1 Preview','platform':'macOS ARM64','published':False,'developer_id_signed':False,'notarized':False,'independent_mac_verified':False},indent=2)+'\n')
+        (stage/'RELEASE.json').write_text(json.dumps({'product':'meowrtuary','version':__version__,'label':__version__,'platform':'macOS ARM64','developer_id_signed':False,'notarized':False,'independent_mac_verified':False},indent=2)+'\n')
         hashes=[];links={}
         for p in sorted(stage.rglob('*')):
             rel=p.relative_to(stage).as_posix()

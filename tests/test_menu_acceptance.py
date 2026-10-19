@@ -36,7 +36,8 @@ class MenuAcceptanceTests(unittest.TestCase):
         with patch.object(ui.sys,'platform','darwin'),patch.object(ui,'ask',side_effect=['a',ui.Back(),'']):self.assertEqual(ui.scan_options(True),['--include-trash'])
     def test_options_vertical(self):
         ui.options([('1','First'),('2','Second')]);lines=self.text.getvalue().splitlines()
-        self.assertEqual([line.strip() for line in lines if '[' in line],['[1] First','[2] Second','[B] Back','[C] Cancel'])
+        self.assertEqual([line.strip() for line in lines if line.strip()],['1.  First','2.  Second','B Back   |   C Cancel'])
+        self.assertNotIn('[1]', '\n'.join(lines))
     def test_result_details_report_and_back(self):
         (self.root/'report.html').write_text('controlled');(self.root/'report.json').write_text('{}')
         with patch.object(ui,'load_report',return_value=({'findings':[]},None)),patch('builtins.input',side_effect=['d','o','b']),patch.object(ui,'open_report') as opened,patch('llm_forensics.terminal.artifact_table',return_value='fixture') as table:

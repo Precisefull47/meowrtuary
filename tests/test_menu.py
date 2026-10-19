@@ -45,11 +45,16 @@ class MenuTests(unittest.TestCase):
     def test_scan_builds_expected_arguments(self):
         with tempfile.TemporaryDirectory() as d:
             out=Path(d)/'new case'
+            original_guard=ui.output_guard(out)
+            ui._selected_outputs[str(out)]=original_guard
             with patch('llm_forensics.menu.sys.platform','darwin'),patch.object(ui,'header'),patch('builtins.print'),patch.object(ui,'ask',return_value='a'),patch.object(ui,'yes',side_effect=[True,False,True]),patch.object(ui,'destination',return_value=out),patch.object(ui,'run_job',return_value=(True,'')) as run,patch.object(ui,'result_actions') as result:
                 ui.scan_flow(True)
                 arguments=run.call_args_list[0].args[0]
+                import json
+                final_output=arguments[arguments.index('--output')+1]
+                self.assertEqual(json.loads(ui._selected_outputs[str(final_output)])['inode'],json.loads(original_guard)['inode'])
                 self.assertIn('--live',arguments);self.assertIn('--acquire',arguments);self.assertIn('--recover-deleted',arguments)
-                self.assertIn('--timeline',arguments);self.assertIn('--format',arguments);result.assert_called_once_with(out)
+                self.assertIn('--timeline',arguments);self.assertIn('--format',arguments);result.assert_called_once_with(arguments[arguments.index('--output')+1]);self.assertEqual(result.call_args.args[0].parent,out.parent)
     def test_existing_parent_creates_unique_child(self):
         with tempfile.TemporaryDirectory() as d:
             with patch.object(ui,'ask',side_effect=['2',d,'y']),patch('builtins.print'):

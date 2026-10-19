@@ -12,7 +12,7 @@ def formula(archive, url, version, homepage):
     if urlparse(homepage).scheme != 'https':
         raise ValueError('Homepage must use HTTPS')
     import re
-    if not re.fullmatch(r'\d+\.\d+\.\d+',version):raise ValueError('Expected a three-part release version')
+    if not re.fullmatch(r'\d+\.\d+\.\d+(?:rc[1-9]\d*)?',version):raise ValueError('Expected a three-part release version with optional rc number')
     sha=hashlib.sha256(Path(archive).read_bytes()).hexdigest()
     # JSON string literals are compatible with Ruby; escape interpolation as well.
     def quote(value):return json.dumps(value).replace('#{',r'\#{')

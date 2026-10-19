@@ -21,6 +21,8 @@ from .output_location import browse_folder, browse_path, validate_parent, output
 
 _selected_outputs = {}
 _step_label = ''
+_footer_shown = False
+_pending_options = None
 
 
 class Back(Exception):
@@ -68,6 +70,9 @@ def clear_screen():
 
 
 def header(title='Workspace'):
+    global _footer_shown, _pending_options
+    _footer_shown=False
+    _pending_options=None
     clear_screen()
     width=min(64,max(20,shutil.get_terminal_size((80,24)).columns-2))
     print(styled(fit_line('  '+DISPLAY_NAME+' / '+title+'  '+_step_label),'1'))
@@ -75,19 +80,69 @@ def header(title='Workspace'):
     print()
 
 
+def shortcut_footer(items):
+    """Keep navigation together below choices; wrap at shortcut boundaries."""
+    global _footer_shown
+    _footer_shown=True
+    width=max(1,shutil.get_terminal_size((80,24)).columns-1)
+    line='  '
+    for key,label in items:
+        text=safe(key)+' '+safe(label)
+        addition=('   |   ' if line.strip() else '')+text
+        if len(line+addition)>width and line.strip():
+            print(line);line='  '+text
+        else:line+=addition
+    if line.strip():print(line)
+
+
 def options(items, navigation=True):
-    """One selectable item per line, shared by all guided submenus."""
-    print()
-    for key,label in items:print(f'  [{key}] {safe(label)}')
+    """Spaced choices with a separate bottom row for navigation shortcuts."""
+    global _pending_options
+    if interactive_prompt():
+        _pending_options=(list(items),navigation)
+        return
+    import textwrap
+    width=max(12,shutil.get_terminal_size((80,24)).columns-1)
+    actions=[];shortcuts=[]
+    for key,label in items:
+        (shortcuts if key.upper() in {'B','C','Q'} else actions).append((key,label))
     if navigation:
-        print('  [B] Back')
-        print('  [C] Cancel')
+        present={key.upper() for key,_ in shortcuts}
+        shortcuts += [(key,label) for key,label in [('B','Back'),('C','Cancel')] if key not in present]
     print()
+    for key,label in actions:
+        prefix='  '+safe(key)+'.  '
+        print(textwrap.fill(safe(label),width=width,initial_indent=prefix,subsequent_indent=' '*len(prefix)))
+        print()
+    shortcut_footer(shortcuts)
+    print()
+
+
+def interactive_prompt():
+    return sys.stdin.isatty() and sys.stdout.isatty() and os.environ.get('TERM')!='dumb'
 
 
 def ask(label,default=None):
+    global _footer_shown, _pending_options
+    pending=_pending_options;_pending_options=None
     suffix=f' [{default}]' if default is not None else ''
-    value=input('  '+label+suffix+': ').strip()
+    if interactive_prompt() and pending:
+        from .menu_navigation import guided_choice
+        value=guided_choice(*pending,label=label)
+    elif interactive_prompt():
+        # Reserve the help rows below readline, then return to the input row.
+        import io
+        from contextlib import redirect_stdout
+        help_text=io.StringIO()
+        with redirect_stdout(help_text):shortcut_footer([('B','Back'),('C','Cancel')])
+        rows=help_text.getvalue().splitlines()
+        print('\n'+help_text.getvalue(),end='')
+        print(f'\033[{len(rows)+1}A\r',end='',flush=True)
+        try:value=input('  '+label+suffix+': ').strip()
+        finally:print(f'\033[{len(rows)}B\r',end='',flush=True)
+    else:
+        value=input('  '+label+suffix+': ').strip()
+    _footer_shown=False
     if value.lower() in {'c','cancel'}:raise Cancel()
     if value.lower() in {'b','back'}:raise Back()
     return value or (str(default) if default is not None else '')
@@ -132,7 +187,7 @@ def source_path(label='Evidence file or folder',report=False,kind='either'):
         except (OSError,ValueError) as exc:print('  '+safe(exc))
 
 
-def destination(prefix, sources=()):
+def destination(prefix, sources=(), device=None):
     suggested=Path.home()
     while True:
         print('  Save location:')
@@ -158,7 +213,7 @@ def destination(prefix, sources=()):
             if output.exists() or output.is_symlink():
                 print('  Output name conflicts with an existing entry. Choose again.');continue
             print('\n  Selected location: '+safe(parent))
-            print('  A new output directory will be created: '+safe(output.name))
+            print('  Case folder: '+safe(device)+'_<UTC acquisition start>' if device else '  A new output directory will be created: '+safe(output.name))
             parent=validate_parent(parent,sources)
             _selected_outputs[str(output)]=output_guard(output)
             return output
@@ -274,7 +329,8 @@ def result_actions(output,return_label='Main menu'):
         if html.exists():items.append(('O','Open report'))
         if data:items.append(('D','Details'))
         options(items,navigation=False)
-        action=input('  > ').strip().lower()
+        try:action=ask('Select').lower()
+        except Back:return
         if action in {'','b','back','c','cancel'}:return
         if action=='p' and denied:
             print('\n'+instructions())
@@ -355,11 +411,14 @@ def scan_flow(live):
             print('  Using captured evidence; quarantined files stay excluded.')
         return source
     def output(state):
+        from .case_naming import local_device, device_label
+        state['device']=local_device() if live else device_label(ask('Source device name (unknown if unavailable)',default='unknown-device') or 'unknown-device')
         if live:
             from .live import discover
             _,boundaries,_=discover(include_trash='--include-trash' in state['options'])
         else:boundaries=[state['source']]
-        return destination('case',sources=boundaries)
+        state['boundaries']=boundaries
+        return destination('case',sources=boundaries,device=state['device'])
     def review(state):
         if live:
             from .live import discover
@@ -369,13 +428,24 @@ def scan_flow(live):
         print('  Source: '+('This Mac - known LLM locations' if live else safe(state['source'])))
         print('  Historical residue: '+('Enabled' if '--recover-deleted' in state['options'] else 'Disabled'))
         print('  Capture, conversations, timeline and reports')
-        print('  Output: '+safe(state['output']))
+        print('  Save folder: '+safe(state['output'].parent))
+        print('  Case name: '+safe(state['device'])+'_UTC-acquisition-start (assigned when confirmed)')
         return yes('Start')
     steps=[] if live else [('source',evidence)]
     state=gather(steps+[('options',lambda _:scan_options(live)),('output',output),('confirmed',review)])
     if not state['confirmed']:return
     args=(['--live'] if live else [str(state['source'])])+state['options']
-    output=state['output']
+    from .case_naming import case_name
+    selected=state['output']
+    output=selected.parent/case_name(state['device'])
+    # Generate the timestamp only after confirmation, immediately before acquisition.
+    validate_parent(output.parent, state['boundaries'])
+    if output.exists() or output.is_symlink():raise ValueError('Case name collision; please start again')
+    guard=json.loads(_selected_outputs.pop(str(selected)))
+    guard['output']=str(output)
+    # Keep the originally selected storage identity across the final name change.
+    _selected_outputs[str(output)]=json.dumps(guard)
+    print('  Acquisition case: '+safe(output.name))
     ok,_=run_job(args+['--acquire','--timeline','--format','both','--export-conversations','--output',output],'Scanning and preparing reports')
     if ok:
         verified,_=run_job(['--verify-package',output],'Verifying saved case')
@@ -411,8 +481,8 @@ def reports_flow():
                 print('  No supported reports found. Select another case or B to return.');break
             header('Available reports')
             print('\n  Available reports:')
-            for number,path in enumerate(reports,1):print(f'  [{number}] Open {safe(path.name)}')
-            options([('E','Export copies'),('B','Back to case selection'),('C','Cancel to main menu')],navigation=False)
+            choices=[(str(number),'Open '+safe(path.name)) for number,path in enumerate(reports,1)]
+            options(choices+[('E','Export copies'),('B','Back to case selection'),('C','Cancel to main menu')],navigation=False)
             try:action=ask('Select').lower()
             except Cancel:raise
             except Back:break

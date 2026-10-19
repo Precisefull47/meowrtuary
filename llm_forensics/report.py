@@ -49,11 +49,18 @@ def render_html(report):
         if gap_rows: coverage_html += '<div class="timeline-scroll"><table><tr><th>Location</th><th>Gap</th><th>Details</th></tr>'+gap_rows+'</table></div>'
         coverage_html += section('Locations checked', coverage['locations'])+'</section>'
     cards = []
+    conversations = []
     for f in report["findings"]:
         observations = []
         for record in f["observations"]:
+            if record.get('text') is not None:
+                observations.append('<div class="message"><strong>'+escape(record.get('role','Record'))+'</strong><pre>'+escape(record['text'])+'</pre></div>')
             observations.append("<details><summary>" + escape(record["record_locator"]) +
                                 "</summary><pre>" + escape(json.dumps(compact(record), ensure_ascii=True, indent=2)) + "</pre></details>")
+        messages = [r for r in f['observations'] if r.get('role') and isinstance(r.get('text'), str)]
+        if messages:
+            message_html = ''.join('<div class="message"><strong>'+escape(r['role'])+'</strong><pre>'+escape(r['text'])+'</pre><details><summary>Source reference · '+escape(r['record_locator'])+'</summary><pre>'+escape(json.dumps(compact(r), ensure_ascii=True, indent=2))+'</pre></details></div>' for r in messages)
+            conversations.append('<article><div class="tags">'+escape(f['runner'])+' · '+escape(f['status'])+'</div><h2>'+escape(f['id'])+'</h2><p class="path">'+escape(f.get('original_source_path') or f['source_path'])+'</p><p><small>Grouped by source artifact; stored record order is not necessarily chronological. Review source references for message versions and timestamps.</small></p>'+message_html+'</article>')
         metadata = []
         if f.get('original_source_path'):
             metadata.append(f"<p class='path'>Original source: {escape(f['original_source_path'])}</p>")
@@ -71,33 +78,33 @@ def render_html(report):
         unsupported = section('Unsupported records', f.get('unparsed_records'))
         cards.append(f"""<article data-runner="{escape(f['runner'])}" data-status="{escape(f['status'])}"><div class="tags">{escape(f['runner'])} · {escape(f['artifact_type'])} · {escape(f['status'])}</div>
 <h2>{escape(f['id'])}</h2><p class="path">{escape(f['source_path'])}</p>
-{''.join(metadata)}{unsupported}{conversation_meta}{recovery}{''.join(observations)}</article>""")
-    return """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<details class="provenance"><summary>Source details, hashes and limitations</summary>{''.join(metadata)}</details>{unsupported}{conversation_meta}{recovery}{''.join(observations)}</article>""")
+    from .report_workspace import STYLE, SCRIPT
+    findings = report['findings']
+    runner_rows = ''.join('<div class="runner-row"><span>'+escape(runner)+'</span><strong>'+str(sum(f['runner']==runner for f in findings))+' artifacts</strong></div>' for runner in sorted({f['runner'] for f in findings}))
+    return """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
-<title>Local LLM Forensics · Evidence report</title><style>
-:root{font-family:system-ui,sans-serif;color:#dae5ed;background:#10191e}body{max-width:1050px;margin:28px auto;padding:0 20px}
-h1{font-size:36px;margin-bottom:12px}h2{font-size:19px}.eyebrow,.tags{color:#7dd8c4}p,li{line-height:1.45}p{margin:8px 0}ul{margin:8px 0;padding-left:20px}section{margin:16px 0}small{color:#aebcc6}
-article,.notice{background:#19262e;border:1px solid #334650;border-radius:12px;padding:16px;margin:12px 0}
-.path,pre{overflow-wrap:anywhere;white-space:pre-wrap;font-size:13px}pre{background:#10191e;padding:10px;border-radius:6px;margin:6px 0}
-.timeline-scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;vertical-align:top;border-bottom:1px solid #334650;padding:10px;overflow-wrap:anywhere}select{padding:8px;margin:8px;background:#19262e;color:#fff}td:first-child{min-width:150px}
-summary{cursor:pointer;padding:5px 0}input{box-sizing:border-box;width:100%;padding:15px;background:#19262e;color:#fff;border:1px solid #537080;border-radius:8px}
-[hidden]{display:none}a{color:#7dd8c4}@media print{body{background:white;color:black}article,.notice,pre{background:white;color:black}input{display:none}}
-</style><p class="eyebrow">LOCAL LLM FORENSICS / EXPERIMENTAL PROTOTYPE</p><h1>Evidence, with its source.</h1>
-<p><small>Empty fields are hidden in this view; structured exports retain the original values.</small></p><p>Existing-file triage. Findings indicate artifacts; they do not establish a person's intent or authorship.</p>
-""" + f"""<div class="notice"><strong>{len(report['findings'])} candidate artifacts · {len(report['issues'])} scan issues</strong>
-<p class="path">Evidence folder: {escape(report['evidence_root'])}</p>
-<p>Evidence OS: {escape(report.get('source_os', 'unknown'))} · Analysis host: {escape(report.get('analysis_host_os', 'unknown'))}</p>
-<ul>{''.join('<li>'+escape(x)+'</li>' for x in report['limitations'])}</ul></div>
-<label for="runner-filter">Runner </label><select id="runner-filter"><option value="all">All runners</option>{''.join('<option value="'+escape(v)+'">'+escape(v)+'</option>' for v in sorted(set(f['runner'] for f in report['findings'])))}</select>
-<label for="status-filter">Status </label><select id="status-filter"><option value="all">All statuses</option>{''.join('<option value="'+escape(v)+'">'+escape(v)+'</option>' for v in sorted(set(f['status'] for f in report['findings'])))}</select>
-<label for="filter">Filter artifacts by runner, source path, or extracted text</label><input id="filter" type="search" placeholder="Search this report…">
-{coverage_html}
-{render_timeline(report.get('timeline'))}
-{''.join(cards) or '<p>No supported candidate artifacts found within the selected scope.</p>'}
-{section('Supplied decoding model', report.get('decoding_model'), '<p>Decoded session text is conditional on this vocabulary. The cache does not authenticate the model association.</p>')}
-{section('Evidence acquisition', report.get('acquisition'), '<p>Raw captures and hashes are preserved in acquisition-manifest.json. Quarantined files are not parsed. Matching reads do not establish an atomic live snapshot.</p>')}
+<title>meowrtuary · Evidence dashboard</title><style>""" + STYLE + """</style></head><body>
+<header><pre aria-hidden="true"> /\\_/\\
+( o.o )</pre><div><h1>meowrtuary</h1><small>Evidence workspace</small></div></header>
+<div class="workspace"><nav aria-label="Report sections"><a href="#overview">Overview</a><a href="#conversations">Conversations</a><a href="#evidence">Evidence</a><a href="#timeline">Timeline</a></nav><main>
+""" + f"""<section id="overview" data-panel><div class="eyebrow">CASE OVERVIEW</div><h2 tabindex="-1">Evidence dashboard</h2>
+<p class="path">Evidence folder: {escape(report['evidence_root'])}</p><p><small>Analysis completed {escape(report['scan_finished_utc'])}</small></p>
+<div class="metrics"><div class="notice"><strong>{len(findings)}</strong><span>Candidate artifacts</span></div><div class="notice"><strong>{sum(len(f['observations']) for f in findings)}</strong><span>Extracted records</span></div><div class="notice"><strong>{len(coverage.get('gaps', []))}</strong><span>Coverage gaps</span></div></div>
+{coverage_html}<div class="notice"><h2>Evidence by runner</h2>{runner_rows or '<p>No supported artifacts found.</p>'}</div>
+<div class="notice"><h2>Scope and interpretation</h2><p>Evidence OS: {escape(report.get('source_os','unknown'))} · Analysis host: {escape(report.get('analysis_host_os','unknown'))}</p><p>Existing-file triage. Findings indicate artifacts; they do not establish a person's intent or authorship.</p><ul>{''.join('<li>'+escape(x)+'</li>' for x in report['limitations'])}</ul></div>
+{section('Evidence acquisition', report.get('acquisition'), '<p>Raw captures and hashes are preserved in acquisition-manifest.json. Quarantined files are not parsed. Matching reads do not establish an atomic live snapshot. Hashes displayed here are recorded values, not a fresh integrity verification.</p>')}
 {section('Discovery locations', report.get('locations'))}
 {section('Discovery coverage', report.get('discovery_coverage'), '<p>Counts refer to matching files, not successful extraction. Zero matches apply only to the readable selected scope.</p>')}
-{section('Scan issues', report.get('issues'))}
-<p>Parser {escape(report['version'])} · Completed {escape(report['scan_finished_utc'])}</p>
-""" + """<script>function filterEvidence(){const q=document.getElementById('filter').value.toLowerCase();const runner=document.getElementById('runner-filter').value;const status=document.getElementById('status-filter').value;document.querySelectorAll('article').forEach(a=>a.hidden=!a.textContent.toLowerCase().includes(q)||(runner!=='all'&&a.dataset.runner!==runner)||(status!=='all'&&a.dataset.status!==status));const picker=document.getElementById('timeline-kind');const kind=picker?picker.value:'all';document.querySelectorAll('[data-timeline-row]').forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(q)||(kind!=='all'&&r.dataset.kind!==kind));}document.getElementById('filter').addEventListener('input',filterEvidence);document.getElementById('runner-filter').addEventListener('change',filterEvidence);document.getElementById('status-filter').addEventListener('change',filterEvidence);const picker=document.getElementById('timeline-kind');if(picker)picker.addEventListener('change',filterEvidence);</script></html>"""
+{section('Scan issues', report.get('issues'))}</section>
+<section id="conversations" data-panel><div class="eyebrow">EXTRACTED MESSAGES</div><h2 tabindex="-1">Conversations</h2><p>Role-labelled text from parsed observations. Historical residue and unsupported records remain in Evidence, separate from these messages.</p>{''.join(conversations) or '<p>No role-labelled messages were extracted within the selected scope.</p>'}</section>
+<section id="evidence" data-panel><div class="eyebrow">ARTIFACT CATALOGUE</div><h2 tabindex="-1">Evidence</h2>
+<div class="filters"><label>Runner <select id="runner-filter"><option value="all">All runners</option>{''.join('<option value="'+escape(v)+'">'+escape(v)+'</option>' for v in sorted({f['runner'] for f in findings}))}</select></label>
+<label>Status <select id="status-filter"><option value="all">All statuses</option>{''.join('<option value="'+escape(v)+'">'+escape(v)+'</option>' for v in sorted({f['status'] for f in findings}))}</select></label></div>
+<label for="filter">Search source paths, extracted text and metadata</label><input id="filter" type="search" placeholder="Search evidence…"><p id="result-count" role="status" aria-live="polite"></p><p id="no-matches" hidden>No artifacts match these filters.</p>
+{''.join(cards) or '<p>No supported candidate artifacts found within the selected scope.</p>'}
+{section('Supplied decoding model', report.get('decoding_model'), '<p>Decoded session text is conditional on this vocabulary. The cache does not authenticate the model association.</p>')}</section>
+<section id="timeline" data-panel><div class="eyebrow">CHRONOLOGY</div><h2 tabindex="-1">Timeline</h2><label for="timeline-search">Search timeline</label><input id="timeline-search" type="search" placeholder="Search events…">
+{render_timeline(report.get('timeline')).replace('id="timeline"', 'class="timeline-content"') or '<p>No timeline data was generated for this report.</p>'}<p id="timeline-count" role="status" aria-live="polite"></p></section>
+<footer><button id="print-section" type="button">Print this section</button><p id="print-scope">Print the selected section with current filters and expanded details. Structured exports contain the full records.</p>Parser {escape(report['version'])} · Empty fields are hidden; structured exports retain original values.</footer></main></div>
+""" + '<script>'+SCRIPT+'</script></body></html>'

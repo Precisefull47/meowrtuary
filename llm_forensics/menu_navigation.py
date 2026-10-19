@@ -166,3 +166,62 @@ def choose(animate=False):
                 else:selected=None;typed='';error='Invalid option.'
         finally:
             if not plain:print('\033[?25h',end='',flush=True)
+
+
+def guided_choice(items, navigation=True, label='Select'):
+    """Arrow-key selection for guided screens, with shortcuts below input."""
+    import io
+    import textwrap
+    from contextlib import redirect_stdout
+    from .menu import shortcut_footer, safe
+    actions=[(k,v) for k,v in items if k.upper() not in {'B','C','Q'}]
+    shortcuts=[(k,v) for k,v in items if k.upper() in {'B','C','Q'}]
+    if navigation:
+        present={k.upper() for k,_ in shortcuts}
+        shortcuts += [(k,v) for k,v in [('B','Back'),('C','Cancel')] if k not in present]
+    # Confirmation requires a deliberate key or arrow choice, never blank Enter.
+    confirmation=any(k.upper()=='Y' for k,_ in actions)
+    selected=0 if actions and actions[0][0].isdigit() else None
+    typed='';previous=None;error=''
+    print('\033[s',end='',flush=True)
+    try:
+        with keys() as fd:
+            while True:
+                width=max(12,shutil.get_terminal_size((80,24)).columns-1)
+                lines=['']
+                capacity=max(1,(shutil.get_terminal_size((80,24)).lines-13)//2)
+                offset=max(0,min((selected or 0)-capacity+1,max(0,len(actions)-capacity)))
+                if len(actions)>capacity:lines.append(f'  Choices {offset+1}–{min(offset+capacity,len(actions))} of {len(actions)}')
+                for i in range(offset,min(offset+capacity,len(actions))):
+                    key,title=actions[i]
+                    prefix=('  > ' if i==selected else '    ')+safe(key)+'.  '
+                    lines+=textwrap.wrap(safe(title),width=width,initial_indent=prefix,subsequent_indent=' '*len(prefix))+['']
+                lines+=['  '+safe(label)+': '+typed]
+                if error:lines+=['  '+error]
+                lines+=['']
+                buf=io.StringIO()
+                arrows='↑ ↓' if (sys.stdout.encoding or '').lower().replace('-','').startswith('utf8') else 'Up/Down'
+                with redirect_stdout(buf):
+                    shortcut_footer([(arrows,'Navigate'),('Enter','Select')]+shortcuts)
+                lines+=buf.getvalue().splitlines()
+                text='\n'.join(lines)+'\n'
+                if text!=previous:
+                    print('\033[u\033[J'+text+'\033[?25l',end='',flush=True);previous=text
+                if os.name=='posix' and not select.select([fd],[],[],.15)[0]:continue
+                key=read_key(fd)
+                if key in {'b','c'}:return key
+                if key=='q':raise KeyboardInterrupt
+                if key in {'up','down'} and actions:
+                    selected=(0 if key=='down' else len(actions)-1) if selected is None else (selected+(-1 if key=='up' else 1))%len(actions)
+                    typed='';error='';continue
+                if key=='enter':
+                    if selected is not None:return actions[selected][0]
+                    if not navigation and not typed and any(k.lower()=='b' for k,_ in shortcuts):return 'b'
+                    error='Choose y or n; B goes back, C cancels.' if confirmation else 'Choose a displayed option.'
+                    continue
+                if key in {'\x7f','\b'}:typed=typed[:-1]
+                elif key.isprintable() and key:typed+=key
+                else:continue
+                selected=next((i for i,(k,_) in enumerate(actions) if k.lower()==typed.lower()),None)
+                error='' if selected is not None else 'Invalid option.'
+    finally:print('\033[?25h',end='',flush=True)

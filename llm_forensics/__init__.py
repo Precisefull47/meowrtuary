@@ -1,3 +1,3 @@
 """Local LLM forensic triage. Experimental artifact rules, not validated attribution."""
 
-__version__ = "1.4.2"
+__version__ = "1.5.0"

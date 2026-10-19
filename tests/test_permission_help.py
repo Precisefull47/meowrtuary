@@ -28,4 +28,4 @@ class PermissionHelpTests(unittest.TestCase):
             output=Path(folder);(output/'report.json').write_text('{}')
             report=self.report('[Errno 1] Operation not permitted');report['findings']=[]
             with patch.object(menu,'load_report',return_value=(report,None)),patch.object(help.sys,'platform','darwin'),patch('builtins.input',return_value=''),patch.object(menu,'open_settings') as opened,patch('sys.stdout',new_callable=io.StringIO) as text:
-                menu.result_actions(output);opened.assert_not_called();self.assertIn('[P] Access settings',text.getvalue())
+                menu.result_actions(output);opened.assert_not_called();self.assertIn('P.  Access settings',text.getvalue())
